@@ -34,6 +34,10 @@ public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
     }
 
     void updatePlayerList(Player player) {
+        player.setPlayerListHeaderFooter(
+            ChatColor.GOLD + "" + ChatColor.BOLD + "RECONNAISSANCE SMP",
+            ChatColor.GRAY + "Play fair. Build your legacy."
+        );
         Faction faction = factions.byPlayer(player.getUniqueId());
         if (faction == null) {
             player.setPlayerListName(ChatColor.WHITE + player.getName());
