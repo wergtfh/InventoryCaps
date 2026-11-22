@@ -1,6 +1,5 @@
 package com.reconnaissance.factions;
 
-import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -13,7 +12,7 @@ public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         factions = new FactionManager(this);
-        FactionCommand commands = new FactionCommand(factions);
+        FactionCommand commands = new FactionCommand(this, factions);
         for (String name : new String[]{"team", "faction", "expand"}) {
             if (getCommand(name) != null) {
                 getCommand(name).setExecutor(commands);
@@ -21,13 +20,17 @@ public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
             }
         }
         getServer().getPluginManager().registerEvents(new FactionListener(this, factions), this);
-        for (Player player : Bukkit.getOnlinePlayers()) updatePlayerList(player);
+        refreshAllPlayerLists();
         getLogger().info("Reconnaissance Factions enabled. Loaded " + factions.all().size() + " teams/factions.");
     }
 
     @Override
     public void onDisable() {
         if (factions != null) factions.save();
+    }
+
+    void refreshAllPlayerLists() {
+        for (Player player : Bukkit.getOnlinePlayers()) updatePlayerList(player);
     }
 
     void updatePlayerList(Player player) {
