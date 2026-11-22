@@ -3,6 +3,7 @@ package com.reconnaissance.factions;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
+import net.kyori.adventure.text.Component;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
@@ -32,6 +33,21 @@ public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
 
     void refreshAllPlayerLists() {
         for (Player player : Bukkit.getOnlinePlayers()) updatePlayerList(player);
+    }
+
+    void updateFactionNameTag(Player player) {
+        Faction faction = factions.byPlayer(player.getUniqueId());
+        if (faction == null || !faction.official) {
+            player.customName(null);
+            player.setCustomNameVisible(false);
+            return;
+        }
+        player.customName(Component.text(player.getName(), factions.color(faction)));
+        player.setCustomNameVisible(true);
+    }
+
+    void refreshFactionNameTags() {
+        for (Player player : Bukkit.getOnlinePlayers()) updateFactionNameTag(player);
     }
 
     void updatePlayerList(Player player) {
