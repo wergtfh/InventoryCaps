@@ -5,6 +5,8 @@ import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.List;
+
 public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
     private FactionManager factions;
 
