@@ -8,6 +8,9 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.Material;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -21,9 +24,11 @@ final class FactionManager {
     private final Map<UUID, Faction> factions = new LinkedHashMap<>();
     private final Map<UUID, UUID> pendingInvites = new HashMap<>();
     private final File file;
+    private final NamespacedKey maceFactionKey;
 
     FactionManager(JavaPlugin plugin) {
         this.plugin = plugin;
+        this.maceFactionKey = new NamespacedKey(plugin, "faction_mace");
         this.file = new File(plugin.getDataFolder(), "factions.yml");
         load();
     }
@@ -180,6 +185,81 @@ final class FactionManager {
         faction.points++;
         faction.expansionChunks++;
         save();
+        syncTopMaces();
+    }
+
+
+    boolean isFactionMace(ItemStack item) {
+        if (item == null || item.getType() != Material.MACE || !item.hasItemMeta()) return false;
+        return item.getItemMeta().getPersistentDataContainer().has(maceFactionKey, PersistentDataType.STRING);
+    }
+
+    UUID maceFactionId(ItemStack item) {
+        if (!isFactionMace(item)) return null;
+        try {
+            return UUID.fromString(item.getItemMeta().getPersistentDataContainer().get(maceFactionKey, PersistentDataType.STRING));
+        } catch (Exception ignored) { return null; }
+    }
+
+    ItemStack createFactionMace(Faction faction) {
+        ItemStack mace = new ItemStack(Material.MACE);
+        ItemMeta meta = mace.getItemMeta();
+        meta.displayName(Component.text(faction.name, color(faction)));
+        meta.lore(List.of(Component.text("RECONNAISSANCE SMP", NamedTextColor.GOLD),
+            Component.text("Awarded to a top-three faction", NamedTextColor.GRAY)));
+        meta.addEnchant(Enchantment.UNBREAKING, 3, true);
+        meta.addEnchant(Enchantment.MENDING, 1, true);
+        meta.addEnchant(Enchantment.DENSITY, 5, true);
+        meta.addEnchant(Enchantment.WIND_BURST, 1, true);
+        meta.getPersistentDataContainer().set(maceFactionKey, PersistentDataType.STRING, faction.id.toString());
+        mace.setItemMeta(meta);
+        return mace;
+    }
+
+    void returnMaceToOwner(Faction faction, ItemStack item) {
+        if (faction == null || item == null) return;
+        Player owner = Bukkit.getPlayer(faction.owner);
+        if (owner == null) return;
+        Map<Integer, ItemStack> leftovers = owner.getInventory().addItem(item.clone());
+        leftovers.values().forEach(left -> owner.getWorld().dropItemNaturally(owner.getLocation(), left));
+        owner.sendMessage(Component.text("Your faction mace has been returned to you.", NamedTextColor.GOLD));
+    }
+
+    void syncTopMaces() {
+        List<Faction> top = leaderboard().stream().limit(3).toList();
+        Set<UUID> winners = top.stream().map(f -> f.id).collect(Collectors.toSet());
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            for (int slot = 0; slot < player.getInventory().getSize(); slot++) {
+                ItemStack item = player.getInventory().getItem(slot);
+                UUID factionId = maceFactionId(item);
+                if (factionId == null) continue;
+                Faction ownerFaction = factions.get(factionId);
+                if (ownerFaction == null || !winners.contains(factionId) || !ownerFaction.members.contains(player.getUniqueId())) {
+                    player.getInventory().setItem(slot, null);
+                    if (ownerFaction != null && winners.contains(factionId)) returnMaceToOwner(ownerFaction, item);
+                }
+            }
+        }
+        for (Faction faction : top) {
+            Player owner = Bukkit.getPlayer(faction.owner);
+            if (owner == null) continue;
+            boolean alreadyHas = false;
+            for (ItemStack item : owner.getInventory().getContents()) {
+                if (faction.id.equals(maceFactionId(item))) { alreadyHas = true; break; }
+            }
+            if (!alreadyHas) {
+                Map<Integer, ItemStack> leftovers = owner.getInventory().addItem(createFactionMace(faction));
+                leftovers.values().forEach(left -> owner.getWorld().dropItemNaturally(owner.getLocation(), left));
+                owner.sendMessage(Component.text("Your faction is in the top three! You have received the " + faction.name + " mace.", NamedTextColor.GOLD));
+            }
+        }
+    }
+
+    void handleUnauthorizedMace(Player player, ItemStack item) {
+        UUID factionId = maceFactionId(item);
+        if (factionId == null) return;
+        Faction faction = factions.get(factionId);
+        if (faction != null && !faction.members.contains(player.getUniqueId())) returnMaceToOwner(faction, item);
     }
 
     List<Faction> leaderboard() {
