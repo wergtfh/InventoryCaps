@@ -22,11 +22,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public final class InventoryCaps extends JavaPlugin implements Listener {
     private final Map<Material, Integer> limits = new EnumMap<>(Material.class);
+    private final Map<UUID, Map<Material, Long>> lastWarnings = new HashMap<>();
     private boolean notifyPlayer;
     private int intervalTicks;
 
@@ -95,26 +98,33 @@ public final class InventoryCaps extends JavaPlugin implements Listener {
         PlayerInventory inv = player.getInventory();
 
         ItemStack[] storage = inv.getStorageContents();
-        for (int i = 0; i < storage.length; i++) storage[i] = sanitize(storage[i], remaining);
+        for (int i = 0; i < storage.length; i++) storage[i] = sanitize(player, storage[i], remaining);
         inv.setStorageContents(storage);
 
         ItemStack[] armor = inv.getArmorContents();
-        for (int i = 0; i < armor.length; i++) armor[i] = sanitize(armor[i], remaining);
+        for (int i = 0; i < armor.length; i++) armor[i] = sanitize(player, armor[i], remaining);
         inv.setArmorContents(armor);
 
-        inv.setItemInOffHand(sanitize(inv.getItemInOffHand(), remaining));
+        inv.setItemInOffHand(sanitize(player, inv.getItemInOffHand(), remaining));
         player.updateInventory();
     }
 
-    private ItemStack sanitize(ItemStack original, EnumMap<Material, Integer> remaining) {
+    private ItemStack sanitize(Player player, ItemStack original, EnumMap<Material, Integer> remaining) {
         if (original == null || original.getType().isAir()) return original;
         ItemStack stack = original.clone();
         Material type = stack.getType();
 
         if (limits.containsKey(type)) {
-            int left = remaining.getOrDefault(type, limits.get(type));
-            int keep = Math.min(stack.getAmount(), Math.max(0, left));
-            remaining.put(type, Math.max(0, left - keep));
+            int left = Math.max(0, remaining.getOrDefault(type, limits.get(type)));
+            int keep = Math.min(stack.getAmount(), left);
+            int excess = stack.getAmount() - keep;
+            remaining.put(type, left - keep);
+            if (excess > 0) {
+                ItemStack dropped = stack.clone();
+                dropped.setAmount(excess);
+                player.getWorld().dropItemNaturally(player.getLocation(), dropped);
+                warn(player, type);
+            }
             if (keep == 0) return null;
             stack.setAmount(keep);
             return stack;
@@ -123,7 +133,7 @@ public final class InventoryCaps extends JavaPlugin implements Listener {
         if (stack.getItemMeta() instanceof BundleMeta bundle) {
             List<ItemStack> cleaned = new ArrayList<>();
             for (ItemStack child : bundle.getItems()) {
-                ItemStack safe = sanitize(child, remaining);
+                ItemStack safe = sanitize(player, child, remaining);
                 if (safe != null && !safe.getType().isAir()) cleaned.add(safe);
             }
             bundle.setItems(cleaned);
@@ -133,11 +143,27 @@ public final class InventoryCaps extends JavaPlugin implements Listener {
         if (stack.getItemMeta() instanceof BlockStateMeta stateMeta
                 && stateMeta.getBlockState() instanceof ShulkerBox shulker) {
             ItemStack[] contents = shulker.getInventory().getContents();
-            for (int i = 0; i < contents.length; i++) contents[i] = sanitize(contents[i], remaining);
+            for (int i = 0; i < contents.length; i++) {
+                contents[i] = sanitize(player, contents[i], remaining);
+            }
             shulker.getInventory().setContents(contents);
             stateMeta.setBlockState(shulker);
             stack.setItemMeta(stateMeta);
         }
         return stack;
+    }
+
+    private void warn(Player player, Material material) {
+        if (!notifyPlayer) return;
+        long now = System.currentTimeMillis();
+        Map<Material, Long> playerWarnings = lastWarnings.computeIfAbsent(player.getUniqueId(), id -> new EnumMap<>(Material.class));
+        long last = playerWarnings.getOrDefault(material, 0L);
+        if (now - last < 2000L) return;
+        playerWarnings.put(material, now);
+
+        int limit = limits.getOrDefault(material, 0);
+        String itemName = material == Material.ENDER_PEARL ? "pearls" :
+                material == Material.TOTEM_OF_UNDYING ? "totems" : material.name().toLowerCase().replace('_', ' ') + "s";
+        player.sendMessage("§c[Inventory Limit] Limit of " + limit + " " + itemName + ". Extra items dropped.");
     }
 }
