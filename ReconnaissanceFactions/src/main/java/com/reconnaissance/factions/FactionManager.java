@@ -129,17 +129,7 @@ final class FactionManager {
     }
 
     private void removeFaction(Faction faction) {
-        World world = faction.worldId == null ? null : Bukkit.getWorld(faction.worldId);
-        if (world != null) {
-            for (String encoded : new ArrayList<>(faction.borderBlocks)) {
-                String[] parts = encoded.split(":");
-                if (parts.length != 4) continue;
-                try {
-                    Block block = world.getBlockAt(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
-                    if (block.getType() == Material.GOLD_BLOCK) block.setType(Material.AIR, false);
-                } catch (NumberFormatException ignored) { }
-            }
-        }
+        restoreBorders(faction);
         disbandVotes.remove(faction.id);
         factions.remove(faction.id);
         pendingInvites.values().removeIf(id -> id.equals(faction.id));
@@ -389,18 +379,43 @@ final class FactionManager {
         };
     }
 
+    private void restoreBorders(Faction faction) {
+        World world = faction.worldId == null ? null : Bukkit.getWorld(faction.worldId);
+        if (world == null) return;
+        for (String encoded : new ArrayList<>(faction.borderBlocks)) {
+            String[] parts = encoded.split(":", 5);
+            if (parts.length < 4) continue;
+            try {
+                Block block = world.getBlockAt(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
+                if (block.getType() != Material.GOLD_BLOCK) continue;
+                if (parts.length == 5) {
+                    String original = new String(Base64.getUrlDecoder().decode(parts[4]), java.nio.charset.StandardCharsets.UTF_8);
+                    block.setBlockData(Bukkit.createBlockData(original), false);
+                } else {
+                    block.setType(Material.AIR, false);
+                }
+            } catch (Exception ignored) { }
+        }
+        faction.borderBlocks.clear();
+    }
+
+    private int findTerrainSurfaceY(World world, int x, int z) {
+        for (int y = world.getMaxHeight() - 1; y >= world.getMinHeight(); y--) {
+            Block block = world.getBlockAt(x, y, z);
+            Material type = block.getType();
+            if (!type.isSolid() || block.isPassable()) continue;
+            if (Tag.LEAVES.isTagged(type) || Tag.LOGS.isTagged(type)) continue;
+            if (type == Material.BEEHIVE || type == Material.BEE_NEST || type == Material.MUSHROOM_STEM
+                    || type == Material.BROWN_MUSHROOM_BLOCK || type == Material.RED_MUSHROOM_BLOCK) continue;
+            return y;
+        }
+        return world.getMinHeight();
+    }
+
     private void rebuildBorders(Faction faction) {
         World world = Bukkit.getWorld(faction.worldId);
         if (world == null) return;
-        for (String encoded : faction.borderBlocks) {
-            String[] p = encoded.split(":");
-            if (p.length != 4) continue;
-            try {
-                Block block = world.getBlockAt(Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
-                if (block.getType() == Material.GOLD_BLOCK) block.setType(Material.AIR, false);
-            } catch (NumberFormatException ignored) { }
-        }
-        faction.borderBlocks.clear();
+        restoreBorders(faction);
         for (ChunkKey key : faction.chunks) {
             for (int x = key.x() << 4; x < (key.x() << 4) + 16; x++) {
                 for (int z = key.z() << 4; z < (key.z() << 4) + 16; z++) {
@@ -409,18 +424,17 @@ final class FactionManager {
                         || !faction.chunks.contains(new ChunkKey(x >> 4, (z - 1) >> 4))
                         || !faction.chunks.contains(new ChunkKey(x >> 4, (z + 1) >> 4));
                     if (!edge) continue;
-                    int y = world.getHighestBlockYAt(x, z) + 1;
-                    if (y >= world.getMaxHeight()) continue;
+                    int y = findTerrainSurfaceY(world, x, z);
                     Block block = world.getBlockAt(x, y, z);
-                    if (block.getType().isAir() || block.isPassable()) {
-                        block.setType(Material.GOLD_BLOCK, false);
-                        faction.borderBlocks.add(world.getUID() + ":" + x + ":" + y + ":" + z);
-                    }
+                    if (block.getType() == Material.BEDROCK || block.getType() == Material.BARRIER) continue;
+                    String original = block.getBlockData().getAsString();
+                    String encodedOriginal = Base64.getUrlEncoder().withoutPadding().encodeToString(original.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    block.setType(Material.GOLD_BLOCK, false);
+                    faction.borderBlocks.add(world.getUID() + ":" + x + ":" + y + ":" + z + ":" + encodedOriginal);
                 }
             }
         }
     }
-
     private void load() {
         if (!file.exists()) return;
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
