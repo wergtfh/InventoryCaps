@@ -226,7 +226,7 @@ final class FactionManager {
     }
 
     void syncTopMaces() {
-        List<Faction> top = leaderboard().stream().limit(3).toList();
+        List<Faction> top = leaderboard().stream().filter(f -> f.points >= 5).limit(3).toList();
         Set<UUID> winners = top.stream().map(f -> f.id).collect(Collectors.toSet());
         for (Player player : Bukkit.getOnlinePlayers()) {
             for (int slot = 0; slot < player.getInventory().getSize(); slot++) {
@@ -260,7 +260,7 @@ final class FactionManager {
     }
 
     boolean isTopThreeFaction(UUID factionId) {
-        return leaderboard().stream().limit(3).anyMatch(f -> f.id.equals(factionId));
+        return leaderboard().stream().filter(f -> f.points >= 5).limit(3).anyMatch(f -> f.id.equals(factionId));
     }
 
     void handleUnauthorizedMace(Player player, ItemStack item) {
