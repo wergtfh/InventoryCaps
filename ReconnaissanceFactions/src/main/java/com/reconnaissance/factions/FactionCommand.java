@@ -11,8 +11,12 @@ import java.util.Locale;
 
 final class FactionCommand implements CommandExecutor, TabCompleter {
     private final FactionManager manager;
+    private final ReconnaissanceFactionsPlugin plugin;
 
-    FactionCommand(FactionManager manager) { this.manager = manager; }
+    FactionCommand(ReconnaissanceFactionsPlugin plugin, FactionManager manager) {
+        this.plugin = plugin;
+        this.manager = manager;
+    }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -21,7 +25,6 @@ final class FactionCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("These commands can only be used in-game.");
             return true;
         }
-
         if (root.equals("team")) return team(player, args);
         if (root.equals("faction")) return faction(player, args);
         if (root.equals("expand")) {
@@ -39,12 +42,13 @@ final class FactionCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             player.sendMessage(ChatColor.GOLD + "" + ChatColor.BOLD + faction.name);
-            player.sendMessage(ChatColor.YELLOW + "Leader: " + ChatColor.WHITE +
-                (Bukkit.getOfflinePlayer(faction.owner).getName() == null ? "Unknown" : Bukkit.getOfflinePlayer(faction.owner).getName()));
+            String leader = Bukkit.getOfflinePlayer(faction.owner).getName();
+            player.sendMessage(ChatColor.YELLOW + "Leader: " + ChatColor.WHITE + (leader == null ? "Unknown" : leader));
             player.sendMessage(ChatColor.YELLOW + "Members (" + faction.members.size() + "):");
             for (var id : faction.members) {
                 String name = Bukkit.getOfflinePlayer(id).getName();
-                player.sendMessage(ChatColor.GRAY + " • " + (name == null ? id.toString() : name) + (id.equals(faction.owner) ? ChatColor.GOLD + " (Leader)" : ""));
+                player.sendMessage(ChatColor.GRAY + " • " + (name == null ? id.toString() : name) +
+                    (id.equals(faction.owner) ? ChatColor.GOLD + " (Leader)" : ""));
             }
             return true;
         }
@@ -56,6 +60,7 @@ final class FactionCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 player.sendMessage(ChatColor.GOLD + manager.createTeam(player, args[1]));
+                plugin.refreshAllPlayerLists();
             }
             case "invite" -> {
                 if (args.length != 2) {
@@ -69,7 +74,10 @@ final class FactionCommand implements CommandExecutor, TabCompleter {
                 }
                 player.sendMessage(ChatColor.GOLD + manager.invite(player, target));
             }
-            case "accept" -> player.sendMessage(ChatColor.GOLD + manager.accept(player));
+            case "accept" -> {
+                player.sendMessage(ChatColor.GOLD + manager.accept(player));
+                plugin.refreshAllPlayerLists();
+            }
             default -> player.sendMessage(ChatColor.YELLOW + "Commands: /team, /team create <name>, /team invite <player>, /team accept");
         }
         return true;
@@ -82,6 +90,7 @@ final class FactionCommand implements CommandExecutor, TabCompleter {
         }
         if (args[0].equalsIgnoreCase("create")) {
             player.sendMessage(ChatColor.GOLD + manager.createClaim(player));
+            plugin.refreshAllPlayerLists();
             return true;
         }
         if (args[0].equalsIgnoreCase("leaderboard")) {
@@ -121,6 +130,7 @@ final class FactionCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             manager.setColor(faction, args[1]);
+            plugin.refreshAllPlayerLists();
             player.sendMessage(ChatColor.GREEN + "Faction colour changed to " + args[1] + ".");
             return true;
         }
