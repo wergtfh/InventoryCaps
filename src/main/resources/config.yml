@@ -1,0 +1,6 @@
+limits:
+  ENDER_PEARL: 48
+  TOTEM_OF_UNDYING: 3
+
+enforcement-interval-ticks: 2
+notify-player: true
