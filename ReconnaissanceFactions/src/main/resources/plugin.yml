@@ -1,0 +1,20 @@
+name: ReconnaissanceFactions
+version: 1.0.0
+main: com.reconnaissance.factions.ReconnaissanceFactionsPlugin
+api-version: '26.2'
+author: Reconnaissance SMP
+description: Teams, faction claims, scoring, expansion and territory protection.
+commands:
+  team:
+    description: Create and manage your team.
+    usage: /team [create|invite|accept]
+  faction:
+    description: Manage factions, view rankings and faction information.
+    usage: /faction [create|leaderboard|color|name]
+  expand:
+    description: Expand your faction claim by one chunk.
+    usage: /expand
+permissions:
+  reconnaissancefactions.admin:
+    description: Administer Reconnaissance Factions.
+    default: op
