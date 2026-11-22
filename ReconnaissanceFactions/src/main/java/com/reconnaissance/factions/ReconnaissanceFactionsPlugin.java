@@ -45,7 +45,9 @@ public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
             player.setCustomNameVisible(false);
             return;
         }
-        player.customName(Component.text(player.getName(), factions.color(faction)));
+        player.customName(Component.text(faction.name, factions.color(faction))
+            .append(Component.space())
+            .append(Component.text(player.getName())));
         player.setCustomNameVisible(true);
     }
 
