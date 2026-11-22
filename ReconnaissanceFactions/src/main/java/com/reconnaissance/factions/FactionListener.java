@@ -7,10 +7,13 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.ItemDespawnEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -37,6 +40,7 @@ final class FactionListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         plugin.updatePlayerList(event.getPlayer());
         plugin.updateFactionNameTag(event.getPlayer());
+        manager.deliverPendingMace(event.getPlayer());
         announceTerritory(event.getPlayer(), event.getPlayer().getLocation());
         manager.syncTopMaces();
     }
@@ -72,6 +76,45 @@ final class FactionListener implements Listener {
         }
     }
 
+
+    @EventHandler
+    public void onFactionMaceDeathDrop(PlayerDeathEvent event) {
+        event.getDrops().removeIf(item -> {
+            if (!manager.isFactionMace(item)) return false;
+            Faction faction = managerFaction(manager.maceFactionId(item));
+            if (faction != null) manager.returnMaceToOwner(faction, item);
+            return true;
+        });
+    }
+
+    @EventHandler
+    public void onFactionMaceDestroyed(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Item dropped)) return;
+        ItemStack stack = dropped.getItemStack();
+        if (!manager.isFactionMace(stack)) return;
+        Faction faction = managerFaction(manager.maceFactionId(stack));
+        if (faction == null) return;
+        event.setCancelled(true);
+        dropped.remove();
+        manager.returnMaceToOwner(faction, stack);
+    }
+
+    @EventHandler
+    public void onFactionMaceDespawn(ItemDespawnEvent event) {
+        ItemStack stack = event.getEntity().getItemStack();
+        if (!manager.isFactionMace(stack)) return;
+        Faction faction = managerFaction(manager.maceFactionId(stack));
+        if (faction == null) return;
+        event.setCancelled(true);
+        event.getEntity().remove();
+        manager.returnMaceToOwner(faction, stack);
+    }
+
+    private Faction managerFaction(UUID factionId) {
+        if (factionId == null) return null;
+        for (Faction faction : manager.all()) if (faction.id.equals(factionId)) return faction;
+        return null;
+    }
 
     @EventHandler
     public void onMacePickup(EntityPickupItemEvent event) {
