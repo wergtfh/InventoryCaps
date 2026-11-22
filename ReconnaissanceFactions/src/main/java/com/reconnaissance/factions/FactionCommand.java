@@ -78,7 +78,22 @@ final class FactionCommand implements CommandExecutor, TabCompleter {
                 player.sendMessage(ChatColor.GOLD + manager.accept(player));
                 plugin.refreshAllPlayerLists();
             }
-            default -> player.sendMessage(ChatColor.YELLOW + "Commands: /team, /team create <name>, /team invite <player>, /team accept");
+            case "delete" -> {
+                if (args.length == 1) {
+                    player.sendMessage(ChatColor.GOLD + manager.startDisband(player));
+                    plugin.refreshAllPlayerLists();
+                } else if (args.length == 2 && args[1].equalsIgnoreCase("confirm")) {
+                    player.sendMessage(ChatColor.GOLD + manager.confirmDisband(player));
+                    plugin.refreshAllPlayerLists();
+                } else {
+                    player.sendMessage(ChatColor.YELLOW + "Usage: /team delete [confirm]");
+                }
+            }
+            case "leave" -> {
+                player.sendMessage(ChatColor.GOLD + manager.leaveTeam(player));
+                plugin.refreshAllPlayerLists();
+            }
+            default -> player.sendMessage(ChatColor.YELLOW + "Commands: /team, /team create <name>, /team invite <player>, /team accept, /team leave, /team delete [confirm]");
         }
         return true;
     }
@@ -148,7 +163,7 @@ final class FactionCommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> options = new ArrayList<>();
         if (command.getName().equalsIgnoreCase("team") && args.length == 1) {
-            options.addAll(List.of("create", "invite", "accept"));
+            options.addAll(List.of("create", "invite", "accept", "leave", "delete"));
         } else if (command.getName().equalsIgnoreCase("faction") && args.length == 1) {
             options.addAll(List.of("create", "leaderboard", "color"));
             for (Faction faction : manager.all()) options.add(faction.name);
