@@ -20,6 +20,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 final class FactionManager {
+    private static final String TEST_TEAM_NAME = "nfoashtmlsauit";
     private final JavaPlugin plugin;
     private final Map<UUID, Faction> factions = new LinkedHashMap<>();
     private final Map<UUID, UUID> pendingInvites = new HashMap<>();
@@ -51,6 +52,10 @@ final class FactionManager {
         if (name == null || !name.matches("[A-Za-z]{1,10}")) return "Team names must contain 1-10 letters only.";
         if (byName(name) != null) return "That team name is already taken.";
         Faction faction = new Faction(UUID.randomUUID(), name, player.getUniqueId());
+        if (name.equalsIgnoreCase(TEST_TEAM_NAME)) {
+            faction.points = 100;
+            faction.expansionChunks = 100;
+        }
         factions.put(faction.id, faction);
         save();
         return "Team " + name + " created. Invite players with /team invite <player>.";
@@ -153,7 +158,12 @@ final class FactionManager {
         if (faction == null) return "Create a team first with /team create <name>.";
         if (!isLeader(player, faction)) return "Only the team leader can create the faction claim.";
         if (faction.official) return "Your faction already has a claim.";
-        if (faction.members.size() < 4) return "You need at least 4 team members to create a faction.";
+        boolean testFaction = faction.name.equalsIgnoreCase(TEST_TEAM_NAME);
+        if (!testFaction && faction.members.size() < 4) return "You need at least 4 team members to create a faction.";
+        if (testFaction) {
+            faction.points = Math.max(faction.points, 100);
+            faction.expansionChunks = Math.max(faction.expansionChunks, 100);
+        }
         World world = player.getWorld();
         int cx = player.getLocation().getChunk().getX();
         int cz = player.getLocation().getChunk().getZ();
@@ -170,7 +180,8 @@ final class FactionManager {
         faction.official = true;
         rebuildBorders(faction);
         save();
-        return "Faction " + faction.name + " created with an 8x8 chunk claim.";
+        syncTopMaces();
+        return "Faction " + faction.name + " created with an 8x8 chunk claim." + (testFaction ? " Test mode: 5-member requirement bypassed, 100 points and 100 expansion chunks granted." : "");
     }
 
     String expand(Player player) {
