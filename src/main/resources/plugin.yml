@@ -1,0 +1,6 @@
+name: InventoryCaps
+version: 1.0.0
+main: com.example.inventorycaps.InventoryCaps
+api-version: '1.21'
+description: Limits ender pearls and totems, including nested bundles and carried shulker boxes.
+author: OpenAI
