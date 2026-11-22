@@ -1,0 +1,191 @@
+package com.reconnaissance.factions;
+
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.Component;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.block.*;
+import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.player.*;
+import org.bukkit.inventory.ItemStack;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+final class FactionListener implements Listener {
+    private final ReconnaissanceFactionsPlugin plugin;
+    private final FactionManager manager;
+    private final Map<UUID, UUID> lastTerritory = new HashMap<>();
+
+    FactionListener(ReconnaissanceFactionsPlugin plugin, FactionManager manager) {
+        this.plugin = plugin;
+        this.manager = manager;
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        plugin.updatePlayerList(event.getPlayer());
+        event.getPlayer().setPlayerListHeaderFooter(
+            ChatColor.GOLD + "" + ChatColor.BOLD + "RECONNAISSANCE SMP",
+            ChatColor.GRAY + "Play fair. Build your legacy."
+        );
+        announceTerritory(event.getPlayer(), event.getPlayer().getLocation());
+    }
+
+    @EventHandler
+    public void onChat(AsyncChatEvent event) {
+        Player player = event.getPlayer();
+        Faction faction = manager.byPlayer(player.getUniqueId());
+        if (faction == null) return;
+        Component prefix = Component.text("[" + faction.name + "] ", manager.color(faction));
+        event.renderer((source, sourceDisplayName, message, viewer) ->
+            prefix.append(sourceDisplayName).append(Component.text(": ")).append(message));
+    }
+
+    @EventHandler
+    public void onMove(PlayerMoveEvent event) {
+        if (event.getTo() == null) return;
+        if (event.getFrom().getBlockX() == event.getTo().getBlockX()
+            && event.getFrom().getBlockZ() == event.getTo().getBlockZ()) return;
+        announceTerritory(event.getPlayer(), event.getTo());
+    }
+
+    private void announceTerritory(Player player, Location location) {
+        Faction faction = manager.claimAt(location);
+        UUID current = faction == null ? null : faction.id;
+        UUID previous = lastTerritory.put(player.getUniqueId(), current);
+        if (current != null && !current.equals(previous)) {
+            player.sendTitle(ChatColor.GOLD + "ENTERED TERRITORY",
+                ChatColor.WHITE + faction.name, 10, 45, 10);
+        }
+    }
+
+    @EventHandler
+    public void onDeath(PlayerDeathEvent event) {
+        Player killer = event.getEntity().getKiller();
+        if (killer == null) return;
+        int before = manager.byPlayer(killer.getUniqueId()) == null ? -1 : manager.byPlayer(killer.getUniqueId()).points;
+        manager.awardKill(killer, event.getEntity());
+        Faction faction = manager.byPlayer(killer.getUniqueId());
+        if (faction != null && faction.official && faction.points > before) {
+            killer.sendMessage(ChatColor.GREEN + "+1 faction point. Your faction now has " + faction.points + " points.");
+        }
+    }
+
+    @EventHandler
+    public void onBlockBreak(BlockBreakEvent event) {
+        Faction claim = manager.claimAt(event.getBlock().getLocation());
+        if (claim == null) return;
+        if (manager.isBorderBlock(event.getBlock().getLocation())) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(ChatColor.RED + "Faction gold borders cannot be broken.");
+            return;
+        }
+        if (!manager.isMember(claim, event.getPlayer().getUniqueId())) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(ChatColor.RED + "You cannot break blocks in " + claim.name + "'s territory.");
+        }
+    }
+
+    @EventHandler
+    public void onBlockPlace(BlockPlaceEvent event) {
+        Faction claim = manager.claimAt(event.getBlock().getLocation());
+        if (claim == null) return;
+        Material type = event.getBlockPlaced().getType();
+        if (isExplosive(type)) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(ChatColor.RED + "Explosives are disabled in faction territory.");
+            return;
+        }
+        if (!manager.isMember(claim, event.getPlayer().getUniqueId()) && type != Material.COBWEB) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(ChatColor.RED + "Enemies may only place cobwebs and water here.");
+        }
+    }
+
+    private boolean isExplosive(Material material) {
+        String name = material.name();
+        return material == Material.TNT || material == Material.END_CRYSTAL ||
+            material == Material.RESPAWN_ANCHOR || name.endsWith("_BED");
+    }
+
+    @EventHandler
+    public void onBucketEmpty(PlayerBucketEmptyEvent event) {
+        Faction claim = manager.claimAt(event.getBlock().getLocation());
+        if (claim == null) return;
+        if (event.getBucket() == Material.LAVA_BUCKET) {
+            if (!manager.isMember(claim, event.getPlayer().getUniqueId())) {
+                event.setCancelled(true);
+                event.getPlayer().sendMessage(ChatColor.RED + "Enemies cannot place lava in faction territory.");
+            }
+            return;
+        }
+        if (!manager.isMember(claim, event.getPlayer().getUniqueId()) && event.getBucket() != Material.WATER_BUCKET) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(ChatColor.RED + "Enemies may only place water here.");
+        }
+    }
+
+    @EventHandler
+    public void onInventoryOpen(InventoryOpenEvent event) {
+        if (!(event.getPlayer() instanceof Player player)) return;
+        Location location = event.getInventory().getLocation();
+        Faction claim = manager.claimAt(location);
+        if (claim != null && !manager.isMember(claim, player.getUniqueId())) {
+            event.setCancelled(true);
+            player.sendMessage(ChatColor.RED + "You cannot access containers in " + claim.name + "'s territory.");
+        }
+    }
+
+    @EventHandler
+    public void onIgnite(BlockIgniteEvent event) {
+        if (manager.claimAt(event.getBlock().getLocation()) != null) event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onBurn(BlockBurnEvent event) {
+        if (manager.claimAt(event.getBlock().getLocation()) != null) event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onSpread(BlockSpreadEvent event) {
+        if (manager.claimAt(event.getBlock().getLocation()) != null) event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onEntityExplosion(EntityExplodeEvent event) {
+        if (manager.claimAt(event.getLocation()) != null) {
+            event.setCancelled(true);
+            return;
+        }
+        event.blockList().removeIf(block -> manager.claimAt(block.getLocation()) != null);
+    }
+
+    @EventHandler
+    public void onBlockExplosion(BlockExplodeEvent event) {
+        if (manager.claimAt(event.getBlock().getLocation()) != null) {
+            event.setCancelled(true);
+            return;
+        }
+        event.blockList().removeIf(block -> manager.claimAt(block.getLocation()) != null);
+    }
+
+    @EventHandler
+    public void onInteract(PlayerInteractEvent event) {
+        if (event.getClickedBlock() == null) return;
+        Faction claim = manager.claimAt(event.getClickedBlock().getLocation());
+        if (claim == null) return;
+        if (event.getItem() != null && isExplosive(event.getItem().getType())) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(ChatColor.RED + "Explosives are disabled in faction territory.");
+        }
+    }
+}
