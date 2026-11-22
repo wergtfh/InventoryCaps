@@ -36,10 +36,6 @@ final class FactionListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         plugin.updatePlayerList(event.getPlayer());
-        event.getPlayer().setPlayerListHeaderFooter(
-            ChatColor.GOLD + "" + ChatColor.BOLD + "RECONNAISSANCE SMP",
-            ChatColor.GRAY + "Play fair. Build your legacy."
-        );
         announceTerritory(event.getPlayer(), event.getPlayer().getLocation());
         manager.syncTopMaces();
     }
@@ -78,6 +74,7 @@ final class FactionListener implements Listener {
         if (killer == null) return;
         int before = manager.byPlayer(killer.getUniqueId()) == null ? -1 : manager.byPlayer(killer.getUniqueId()).points;
         manager.awardKill(killer, event.getEntity());
+        plugin.refreshAllPlayerLists();
         Faction faction = manager.byPlayer(killer.getUniqueId());
         if (faction != null && faction.official && faction.points > before) {
             killer.sendMessage(ChatColor.GREEN + "+1 faction point. Your faction now has " + faction.points + " points.");
