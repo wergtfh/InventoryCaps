@@ -86,7 +86,6 @@ final class FactionManager {
         if (isLeader(player, faction)) return "The team leader cannot leave. Use /team delete to disband the team.";
         faction.members.remove(player.getUniqueId());
         faction.lastVictims.remove(player.getUniqueId());
-        pendingInvites.values().removeIf(id -> id.equals(faction.id) && player.getUniqueId().equals(id));
         save();
         syncTopMaces();
         return "You left " + faction.name + ".";
