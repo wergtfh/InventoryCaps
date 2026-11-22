@@ -13,6 +13,9 @@ import org.bukkit.event.block.*;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
 
@@ -38,6 +41,7 @@ final class FactionListener implements Listener {
             ChatColor.GRAY + "Play fair. Build your legacy."
         );
         announceTerritory(event.getPlayer(), event.getPlayer().getLocation());
+        manager.syncTopMaces();
     }
 
     @EventHandler
@@ -77,6 +81,58 @@ final class FactionListener implements Listener {
         Faction faction = manager.byPlayer(killer.getUniqueId());
         if (faction != null && faction.official && faction.points > before) {
             killer.sendMessage(ChatColor.GREEN + "+1 faction point. Your faction now has " + faction.points + " points.");
+        }
+    }
+
+
+    @EventHandler
+    public void onMacePickup(EntityPickupItemEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        ItemStack item = event.getItem().getItemStack();
+        if (!manager.isFactionMace(item)) return;
+        UUID factionId = manager.maceFactionId(item);
+        Faction faction = null;
+        for (Faction candidate : manager.all()) if (candidate.id.equals(factionId)) faction = candidate;
+        if (faction == null || !faction.members.contains(player.getUniqueId())) {
+            event.setCancelled(true);
+            if (faction != null) manager.returnMaceToOwner(faction, item);
+            event.getItem().remove();
+            player.sendMessage(ChatColor.RED + "That faction mace belongs to another faction.");
+        }
+    }
+
+    @EventHandler
+    public void onMaceInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        ItemStack current = event.getCurrentItem();
+        ItemStack cursor = event.getCursor();
+        ItemStack restricted = manager.isFactionMace(current) ? current : manager.isFactionMace(cursor) ? cursor : null;
+        if (restricted == null) return;
+        UUID factionId = manager.maceFactionId(restricted);
+        Faction faction = null;
+        for (Faction candidate : manager.all()) if (candidate.id.equals(factionId)) faction = candidate;
+        if (faction != null && !faction.members.contains(player.getUniqueId())) {
+            event.setCancelled(true);
+            if (current != null && manager.isFactionMace(current)) event.setCurrentItem(null);
+            if (cursor != null && manager.isFactionMace(cursor)) player.setItemOnCursor(null);
+            manager.returnMaceToOwner(faction, restricted);
+            player.sendMessage(ChatColor.RED + "Only " + faction.name + " members can hold that mace.");
+        }
+    }
+
+    @EventHandler
+    public void onMaceInventoryDrag(InventoryDragEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        ItemStack oldCursor = event.getOldCursor();
+        if (!manager.isFactionMace(oldCursor)) return;
+        UUID factionId = manager.maceFactionId(oldCursor);
+        Faction faction = null;
+        for (Faction candidate : manager.all()) if (candidate.id.equals(factionId)) faction = candidate;
+        if (faction != null && !faction.members.contains(player.getUniqueId())) {
+            event.setCancelled(true);
+            player.setItemOnCursor(null);
+            manager.returnMaceToOwner(faction, oldCursor);
+            player.sendMessage(ChatColor.RED + "Only " + faction.name + " members can hold that mace.");
         }
     }
 
