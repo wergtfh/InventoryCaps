@@ -1,6 +1,7 @@
 package com.example.inventorycaps;
 
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -91,33 +92,37 @@ public final class InventoryCaps extends JavaPlugin implements Listener {
     }
 
     private void enforce(Player player) {
-        if (limits.isEmpty()) return;
+        // Creative inventory actions use a client-side cursor/slot protocol.
+        // Rewriting the inventory during those actions can make items vanish.
+        // Leave creative players alone rather than risk deleting their items.
+        if (player.getGameMode() == GameMode.CREATIVE || limits.isEmpty()) return;
+
         EnumMap<Material, Integer> remaining = new EnumMap<>(limits);
         PlayerInventory inv = player.getInventory();
 
-        // Pass 1: count and trim ordinary inventory stacks first.
-        // This ensures loose pearls/totems are kept ahead of items in bundles.
+        // Pass 1: bundle contents have priority and consume the allowance first.
+        // Shulker boxes are deliberately ignored and are never read or modified.
         ItemStack[] storage = inv.getStorageContents();
-        for (int i = 0; i < storage.length; i++) storage[i] = trimDirect(player, storage[i], remaining);
-        inv.setStorageContents(storage);
-
-        ItemStack[] armor = inv.getArmorContents();
-        for (int i = 0; i < armor.length; i++) armor[i] = trimDirect(player, armor[i], remaining);
-        inv.setArmorContents(armor);
-
-        inv.setItemInOffHand(trimDirect(player, inv.getItemInOffHand(), remaining));
-
-        // Pass 2: only after loose inventory items are counted, inspect bundles.
-        // Shulker boxes are intentionally ignored and are never modified or counted.
-        storage = inv.getStorageContents();
         for (int i = 0; i < storage.length; i++) storage[i] = trimBundleContents(player, storage[i], remaining);
         inv.setStorageContents(storage);
 
-        armor = inv.getArmorContents();
+        ItemStack[] armor = inv.getArmorContents();
         for (int i = 0; i < armor.length; i++) armor[i] = trimBundleContents(player, armor[i], remaining);
         inv.setArmorContents(armor);
 
         inv.setItemInOffHand(trimBundleContents(player, inv.getItemInOffHand(), remaining));
+
+        // Pass 2: loose items are trimmed only after all bundle contents have
+        // been counted, so loose excess is dropped before bundle contents.
+        storage = inv.getStorageContents();
+        for (int i = 0; i < storage.length; i++) storage[i] = trimDirect(player, storage[i], remaining);
+        inv.setStorageContents(storage);
+
+        armor = inv.getArmorContents();
+        for (int i = 0; i < armor.length; i++) armor[i] = trimDirect(player, armor[i], remaining);
+        inv.setArmorContents(armor);
+
+        inv.setItemInOffHand(trimDirect(player, inv.getItemInOffHand(), remaining));
         player.updateInventory();
     }
 
@@ -139,9 +144,7 @@ public final class InventoryCaps extends JavaPlugin implements Listener {
 
     private ItemStack trimBundleContents(Player player, ItemStack original, EnumMap<Material, Integer> remaining) {
         if (original == null || original.getType().isAir()) return original;
-
-        // Do not inspect, count, or rewrite shulker boxes or any other container item.
-        if (!(original.getItemMeta() instanceof BundleMeta bundle)) return original;
+        if (!(original.getItemMeta() instanceof BundleMeta)) return original;
 
         ItemStack stack = original.clone();
         BundleMeta meta = (BundleMeta) stack.getItemMeta();
@@ -158,7 +161,6 @@ public final class InventoryCaps extends JavaPlugin implements Listener {
                 safe = keep == 0 ? null : child.clone();
                 if (safe != null) safe.setAmount(keep);
             } else {
-                // Nested bundles are checked recursively; shulkers remain untouched.
                 safe = trimBundleContents(player, child, remaining);
             }
             if (safe != null && !safe.getType().isAir()) cleaned.add(safe);
