@@ -36,18 +36,9 @@ final class FactionListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         plugin.updatePlayerList(event.getPlayer());
+        plugin.updateFactionNameTag(event.getPlayer());
         announceTerritory(event.getPlayer(), event.getPlayer().getLocation());
         manager.syncTopMaces();
-    }
-
-    @EventHandler
-    public void onChat(AsyncChatEvent event) {
-        Player player = event.getPlayer();
-        Faction faction = manager.byPlayer(player.getUniqueId());
-        if (faction == null) return;
-        Component prefix = Component.text("[" + faction.name + "] ", manager.color(faction));
-        event.renderer((source, sourceDisplayName, message, viewer) ->
-            prefix.append(sourceDisplayName).append(Component.text(": ")).append(message));
     }
 
     @EventHandler
