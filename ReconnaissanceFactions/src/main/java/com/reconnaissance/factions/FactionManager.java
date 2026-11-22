@@ -23,6 +23,7 @@ final class FactionManager {
     private final JavaPlugin plugin;
     private final Map<UUID, Faction> factions = new LinkedHashMap<>();
     private final Map<UUID, UUID> pendingInvites = new HashMap<>();
+    private final Map<UUID, Set<UUID>> disbandVotes = new HashMap<>();
     private final File file;
     private final NamespacedKey maceFactionKey;
 
@@ -76,6 +77,76 @@ final class FactionManager {
         faction.members.add(player.getUniqueId());
         save();
         return "You joined " + faction.name + ".";
+    }
+
+
+    String leaveTeam(Player player) {
+        Faction faction = byPlayer(player.getUniqueId());
+        if (faction == null) return "You are not in a team.";
+        if (isLeader(player, faction)) return "The team leader cannot leave. Use /team delete to disband the team.";
+        faction.members.remove(player.getUniqueId());
+        faction.lastVictims.remove(player.getUniqueId());
+        pendingInvites.values().removeIf(id -> id.equals(faction.id) && player.getUniqueId().equals(id));
+        save();
+        syncTopMaces();
+        return "You left " + faction.name + ".";
+    }
+
+    String startDisband(Player player) {
+        Faction faction = byPlayer(player.getUniqueId());
+        if (faction == null) return "You are not in a team.";
+        if (!isLeader(player, faction)) return "Only the team leader can start a disband vote.";
+        if (!faction.official) {
+            removeFaction(faction);
+            return "Team " + faction.name + " has been disbanded.";
+        }
+        Set<UUID> votes = disbandVotes.computeIfAbsent(faction.id, ignored -> new HashSet<>());
+        votes.add(player.getUniqueId());
+        if (votes.size() >= 3) {
+            removeFaction(faction);
+            return "Faction " + faction.name + " has been disbanded. Its claim and all points have been removed.";
+        }
+        return "Disband vote started. Your vote counts. " + votes.size() + "/3 votes. Members use /team delete confirm.";
+    }
+
+    String confirmDisband(Player player) {
+        Faction faction = byPlayer(player.getUniqueId());
+        if (faction == null) return "You are not in a team.";
+        if (!faction.official) return "This team does not need a vote. Ask its leader to use /team delete.";
+        Set<UUID> votes = disbandVotes.get(faction.id);
+        if (votes == null) return "There is no active disband vote. Ask the team leader to use /team delete.";
+        if (!votes.add(player.getUniqueId())) return "Your vote has already been counted.";
+        if (votes.size() >= 3) {
+            String name = faction.name;
+            removeFaction(faction);
+            return "Faction " + name + " has been disbanded. Its claim and all points have been removed.";
+        }
+        return "Disband vote recorded: " + votes.size() + "/3 members agree.";
+    }
+
+    private void removeFaction(Faction faction) {
+        World world = faction.worldId == null ? null : Bukkit.getWorld(faction.worldId);
+        if (world != null) {
+            for (String encoded : new ArrayList<>(faction.borderBlocks)) {
+                String[] parts = encoded.split(":");
+                if (parts.length != 4) continue;
+                try {
+                    Block block = world.getBlockAt(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
+                    if (block.getType() == Material.GOLD_BLOCK) block.setType(Material.AIR, false);
+                } catch (NumberFormatException ignored) { }
+            }
+        }
+        disbandVotes.remove(faction.id);
+        factions.remove(faction.id);
+        pendingInvites.values().removeIf(id -> id.equals(faction.id));
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            for (int slot = 0; slot < online.getInventory().getSize(); slot++) {
+                if (faction.id.equals(maceFactionId(online.getInventory().getItem(slot))))
+                    online.getInventory().setItem(slot, null);
+            }
+        }
+        save();
+        syncTopMaces();
     }
 
     String createClaim(Player player) {
