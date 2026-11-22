@@ -24,6 +24,10 @@ The plugin JAR is created in `build/libs/`.
 - `/faction color <colour>` - set faction display colour (leader, after claiming)
 - `/expand` - spend one expansion chunk on an adjacent chunk (leader only)
 
+## Top-three faction maces
+
+The three highest-ranked official factions each receive one mace for their faction. It is named after the faction and has Unbreaking III, Mending, Density V, and Wind Burst I. The mace is tagged with its faction ID, restricted to current faction members, and removed when that faction falls outside the top three. If an opposing player tries to pick it up, the pickup is cancelled and the mace is returned to the faction leader (or reissued when the leader next joins). Rankings and rewards resynchronise after eligible point changes and on player join.
+
 ## Notes
 
 - Claims and faction data are stored in the plugin data folder.
