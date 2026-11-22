@@ -162,15 +162,21 @@ final class FactionManager {
 
     void awardKill(Player killer, Player victim) {
         Faction faction = byPlayer(killer.getUniqueId());
-        if (faction == null || !faction.official || faction.members.contains(victim.getUniqueId())) return;
+        if (faction == null || !faction.official) return;
+        UUID previous = faction.lastVictims.put(killer.getUniqueId(), victim.getUniqueId());
+        if (faction.members.contains(victim.getUniqueId()) || victim.getUniqueId().equals(previous)) {
+            save();
+            return;
+        }
         boolean wearingDiamond = Arrays.stream(killer.getInventory().getArmorContents())
             .filter(Objects::nonNull).anyMatch(item -> switch (item.getType()) {
                 case DIAMOND_HELMET, DIAMOND_CHESTPLATE, DIAMOND_LEGGINGS, DIAMOND_BOOTS -> true;
                 default -> false;
             });
-        if (!wearingDiamond) return;
-        UUID previous = faction.lastVictims.put(killer.getUniqueId(), victim.getUniqueId());
-        if (victim.getUniqueId().equals(previous)) return;
+        if (!wearingDiamond) {
+            save();
+            return;
+        }
         faction.points++;
         faction.expansionChunks++;
         save();
