@@ -60,25 +60,25 @@ public final class InventoryCaps extends JavaPlugin implements Listener {
         EnumMap<Material,Integer> remaining = new EnumMap<>(limits);
         PlayerInventory inv = p.getInventory();
 
-        // Loose inventory items have priority and are kept first.
+        // Bundle contents have priority and are kept first.
+        // Shulker boxes are not inspected or changed.
         ItemStack[] storage=inv.getStorageContents();
-        for(int i=0;i<storage.length;i++) storage[i]=trimLoose(p,storage[i],remaining);
-        inv.setStorageContents(storage);
-        ItemStack[] armor=inv.getArmorContents();
-        for(int i=0;i<armor.length;i++) armor[i]=trimLoose(p,armor[i],remaining);
-        inv.setArmorContents(armor);
-        inv.setItemInOffHand(trimLoose(p,inv.getItemInOffHand(),remaining));
-
-        // Bundle contents are counted after loose items, so they are the first
-        // source trimmed when the combined total exceeds the limit. Shulkers
-        // are not inspected or changed.
-        storage=inv.getStorageContents();
         for(int i=0;i<storage.length;i++) storage[i]=trimBundles(p,storage[i],remaining);
         inv.setStorageContents(storage);
-        armor=inv.getArmorContents();
+        ItemStack[] armor=inv.getArmorContents();
         for(int i=0;i<armor.length;i++) armor[i]=trimBundles(p,armor[i],remaining);
         inv.setArmorContents(armor);
         inv.setItemInOffHand(trimBundles(p,inv.getItemInOffHand(),remaining));
+
+        // Loose inventory items are processed afterwards. If the combined
+        // count is over the limit, excess loose items are dropped first.
+        storage=inv.getStorageContents();
+        for(int i=0;i<storage.length;i++) storage[i]=trimLoose(p,storage[i],remaining);
+        inv.setStorageContents(storage);
+        armor=inv.getArmorContents();
+        for(int i=0;i<armor.length;i++) armor[i]=trimLoose(p,armor[i],remaining);
+        inv.setArmorContents(armor);
+        inv.setItemInOffHand(trimLoose(p,inv.getItemInOffHand(),remaining));
     }
 
     private ItemStack trimLoose(Player p,ItemStack item,EnumMap<Material,Integer> remaining) {
