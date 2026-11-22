@@ -235,8 +235,10 @@ final class FactionManager {
     boolean isBorderBlock(Location location) {
         if (location == null || location.getWorld() == null) return false;
         Faction faction = claimAt(location);
-        return faction != null && faction.borderBlocks.contains(location.getWorld().getUID() + ":" +
-            location.getBlockX() + ":" + location.getBlockY() + ":" + location.getBlockZ());
+        if (faction == null) return false;
+        String prefix = location.getWorld().getUID() + ":" + location.getBlockX() + ":" +
+            location.getBlockY() + ":" + location.getBlockZ() + ":";
+        return faction.borderBlocks.stream().anyMatch(encoded -> encoded.startsWith(prefix));
     }
 
     void awardKill(Player killer, Player victim) {
