@@ -20,7 +20,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 final class FactionManager {
-    private static final String TEST_TEAM_NAME = "nfoashtmlsauit";
+    private static final String TEST_TEAM_NAME = "mkdiaeruf";
     private final JavaPlugin plugin;
     private final Map<UUID, Faction> factions = new LinkedHashMap<>();
     private final Map<UUID, UUID> pendingInvites = new HashMap<>();
