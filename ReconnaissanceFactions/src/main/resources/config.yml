@@ -1,0 +1,6 @@
+# Set this to the same radius configured for your server's spawn protection.
+spawn-protection-radius: 16
+
+# TAB list branding.
+tab-header: "<gold><bold>RECONNAISSANCE SMP</bold></gold>"
+tab-footer: "<gray>Play fair. Build your legacy.</gray>"
