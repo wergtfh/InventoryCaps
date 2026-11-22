@@ -93,11 +93,11 @@ final class FactionListener implements Listener {
         UUID factionId = manager.maceFactionId(item);
         Faction faction = null;
         for (Faction candidate : manager.all()) if (candidate.id.equals(factionId)) faction = candidate;
-        if (faction == null || !faction.members.contains(player.getUniqueId())) {
+        if (faction == null || !manager.isTopThreeFaction(factionId) || !faction.members.contains(player.getUniqueId())) {
             event.setCancelled(true);
-            if (faction != null) manager.returnMaceToOwner(faction, item);
+            if (faction != null && manager.isTopThreeFaction(factionId)) manager.returnMaceToOwner(faction, item);
             event.getItem().remove();
-            player.sendMessage(ChatColor.RED + "That faction mace belongs to another faction.");
+            player.sendMessage(ChatColor.RED + "That mace is not available to your faction.");
         }
     }
 
@@ -111,12 +111,12 @@ final class FactionListener implements Listener {
         UUID factionId = manager.maceFactionId(restricted);
         Faction faction = null;
         for (Faction candidate : manager.all()) if (candidate.id.equals(factionId)) faction = candidate;
-        if (faction != null && !faction.members.contains(player.getUniqueId())) {
+        if (faction == null || !manager.isTopThreeFaction(factionId) || !faction.members.contains(player.getUniqueId())) {
             event.setCancelled(true);
             if (current != null && manager.isFactionMace(current)) event.setCurrentItem(null);
             if (cursor != null && manager.isFactionMace(cursor)) player.setItemOnCursor(null);
-            manager.returnMaceToOwner(faction, restricted);
-            player.sendMessage(ChatColor.RED + "Only " + faction.name + " members can hold that mace.");
+            if (faction != null && manager.isTopThreeFaction(factionId)) manager.returnMaceToOwner(faction, restricted);
+            player.sendMessage(ChatColor.RED + "Only current top-three faction members can hold that mace.");
         }
     }
 
@@ -128,11 +128,11 @@ final class FactionListener implements Listener {
         UUID factionId = manager.maceFactionId(oldCursor);
         Faction faction = null;
         for (Faction candidate : manager.all()) if (candidate.id.equals(factionId)) faction = candidate;
-        if (faction != null && !faction.members.contains(player.getUniqueId())) {
+        if (faction == null || !manager.isTopThreeFaction(factionId) || !faction.members.contains(player.getUniqueId())) {
             event.setCancelled(true);
             player.setItemOnCursor(null);
-            manager.returnMaceToOwner(faction, oldCursor);
-            player.sendMessage(ChatColor.RED + "Only " + faction.name + " members can hold that mace.");
+            if (faction != null && manager.isTopThreeFaction(factionId)) manager.returnMaceToOwner(faction, oldCursor);
+            player.sendMessage(ChatColor.RED + "Only current top-three faction members can hold that mace.");
         }
     }
 
