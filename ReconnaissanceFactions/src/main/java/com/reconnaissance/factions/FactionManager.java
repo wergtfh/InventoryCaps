@@ -244,8 +244,12 @@ final class FactionManager {
             Player owner = Bukkit.getPlayer(faction.owner);
             if (owner == null) continue;
             boolean alreadyHas = false;
-            for (ItemStack item : owner.getInventory().getContents()) {
-                if (faction.id.equals(maceFactionId(item))) { alreadyHas = true; break; }
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                if (!faction.members.contains(online.getUniqueId())) continue;
+                for (ItemStack item : online.getInventory().getContents()) {
+                    if (faction.id.equals(maceFactionId(item))) { alreadyHas = true; break; }
+                }
+                if (alreadyHas) break;
             }
             if (!alreadyHas) {
                 Map<Integer, ItemStack> leftovers = owner.getInventory().addItem(createFactionMace(faction));
@@ -253,6 +257,10 @@ final class FactionManager {
                 owner.sendMessage(Component.text("Your faction is in the top three! You have received the " + faction.name + " mace.", NamedTextColor.GOLD));
             }
         }
+    }
+
+    boolean isTopThreeFaction(UUID factionId) {
+        return leaderboard().stream().limit(3).anyMatch(f -> f.id.equals(factionId));
     }
 
     void handleUnauthorizedMace(Player player, ItemStack item) {
