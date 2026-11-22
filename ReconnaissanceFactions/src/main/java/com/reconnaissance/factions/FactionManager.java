@@ -25,6 +25,7 @@ final class FactionManager {
     private final Map<UUID, Faction> factions = new LinkedHashMap<>();
     private final Map<UUID, UUID> pendingInvites = new HashMap<>();
     private final Map<UUID, Set<UUID>> disbandVotes = new HashMap<>();
+    private final Map<UUID, ItemStack> pendingMaceReturns = new HashMap<>();
     private final File file;
     private final NamespacedKey maceFactionKey;
 
@@ -293,12 +294,25 @@ final class FactionManager {
     }
 
     void returnMaceToOwner(Faction faction, ItemStack item) {
-        if (faction == null || item == null) return;
+        if (faction == null || item == null || item.getType().isAir()) return;
         Player owner = Bukkit.getPlayer(faction.owner);
-        if (owner == null) return;
+        if (owner == null) {
+            pendingMaceReturns.put(faction.owner, item.clone());
+            save();
+            return;
+        }
         Map<Integer, ItemStack> leftovers = owner.getInventory().addItem(item.clone());
         leftovers.values().forEach(left -> owner.getWorld().dropItemNaturally(owner.getLocation(), left));
         owner.sendMessage(Component.text("Your faction mace has been returned to you.", NamedTextColor.GOLD));
+    }
+
+    void deliverPendingMace(Player player) {
+        ItemStack pending = pendingMaceReturns.remove(player.getUniqueId());
+        if (pending == null) return;
+        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(pending);
+        leftovers.values().forEach(left -> player.getWorld().dropItemNaturally(player.getLocation(), left));
+        player.sendMessage(Component.text("Your faction mace was returned while you were offline.", NamedTextColor.GOLD));
+        save();
     }
 
     void syncTopMaces() {
@@ -443,6 +457,17 @@ final class FactionManager {
     private void load() {
         if (!file.exists()) return;
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection pending = yaml.getConfigurationSection("pendingMaceReturns");
+        if (pending != null) {
+            for (String ownerId : pending.getKeys(false)) {
+                try {
+                    ItemStack item = pending.getItemStack(ownerId);
+                    if (item != null) pendingMaceReturns.put(UUID.fromString(ownerId), item);
+                } catch (Exception ex) {
+                    plugin.getLogger().warning("Could not load pending faction mace for " + ownerId);
+                }
+            }
+        }
         ConfigurationSection root = yaml.getConfigurationSection("factions");
         if (root == null) return;
         for (String idText : root.getKeys(false)) {
@@ -489,6 +514,8 @@ final class FactionManager {
             for (Map.Entry<UUID, UUID> entry : f.lastVictims.entrySet())
                 yaml.set(path + ".lastVictims." + entry.getKey(), entry.getValue().toString());
         }
+        for (Map.Entry<UUID, ItemStack> entry : pendingMaceReturns.entrySet())
+            yaml.set("pendingMaceReturns." + entry.getKey(), entry.getValue());
         try { yaml.save(file); }
         catch (IOException ex) { plugin.getLogger().severe("Could not save factions.yml: " + ex.getMessage()); }
     }
