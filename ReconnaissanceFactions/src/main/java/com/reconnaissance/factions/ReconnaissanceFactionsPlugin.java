@@ -21,6 +21,7 @@ public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
         }
         getServer().getPluginManager().registerEvents(new FactionListener(this, factions), this);
         refreshAllPlayerLists();
+        factions.syncTopMaces();
         getLogger().info("Reconnaissance Factions enabled. Loaded " + factions.all().size() + " teams/factions.");
     }
 
