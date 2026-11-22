@@ -106,11 +106,13 @@ final class FactionManager {
         }
         Set<UUID> votes = disbandVotes.computeIfAbsent(faction.id, ignored -> new HashSet<>());
         votes.add(player.getUniqueId());
-        if (votes.size() >= 3) {
+        int requiredVotes = (int) Math.ceil(faction.members.size() * 0.90);
+        if (votes.size() >= requiredVotes) {
+            String name = faction.name;
             removeFaction(faction);
-            return "Faction " + faction.name + " has been disbanded. Its claim and all points have been removed.";
+            return "Faction " + name + " has been disbanded. Its claim, border and all points have been removed.";
         }
-        return "Disband vote started. Your vote counts. " + votes.size() + "/3 votes. Members use /team delete confirm.";
+        return "Disband vote started. Your vote counts. " + votes.size() + "/" + requiredVotes + " yes votes (90% required). Members use /team delete confirm.";
     }
 
     String confirmDisband(Player player) {
@@ -120,12 +122,13 @@ final class FactionManager {
         Set<UUID> votes = disbandVotes.get(faction.id);
         if (votes == null) return "There is no active disband vote. Ask the team leader to use /team delete.";
         if (!votes.add(player.getUniqueId())) return "Your vote has already been counted.";
-        if (votes.size() >= 3) {
+        int requiredVotes = (int) Math.ceil(faction.members.size() * 0.90);
+        if (votes.size() >= requiredVotes) {
             String name = faction.name;
             removeFaction(faction);
-            return "Faction " + name + " has been disbanded. Its claim and all points have been removed.";
+            return "Faction " + name + " has been disbanded. Its claim, border and all points have been removed.";
         }
-        return "Disband vote recorded: " + votes.size() + "/3 members agree.";
+        return "Disband vote recorded: " + votes.size() + "/" + requiredVotes + " yes votes (90% required).";
     }
 
     private void removeFaction(Faction faction) {
