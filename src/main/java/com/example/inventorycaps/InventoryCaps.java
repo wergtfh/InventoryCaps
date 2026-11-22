@@ -18,178 +18,118 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.BundleMeta;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public final class InventoryCaps extends JavaPlugin implements Listener {
-    private final Map<Material, Integer> limits = new EnumMap<>(Material.class);
-    private final Map<UUID, Map<Material, Long>> lastWarnings = new HashMap<>();
+    private final Map<Material,Integer> limits = new EnumMap<>(Material.class);
+    private final Map<UUID,Map<Material,Long>> lastWarnings = new HashMap<>();
     private boolean notifyPlayer;
     private int intervalTicks;
 
-    @Override
-    public void onEnable() {
+    @Override public void onEnable() {
         saveDefaultConfig();
-        loadLimits();
-        notifyPlayer = getConfig().getBoolean("notify-player", true);
-        intervalTicks = Math.max(1, getConfig().getInt("enforcement-interval-ticks", 2));
-        Bukkit.getPluginManager().registerEvents(this, this);
-        Bukkit.getScheduler().runTaskTimer(this, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) enforce(player);
-        }, 1L, intervalTicks);
-        getLogger().info("InventoryCaps enabled. Limits: " + limits);
-    }
-
-    private void loadLimits() {
-        if (getConfig().getConfigurationSection("limits") == null) return;
-        for (String key : getConfig().getConfigurationSection("limits").getKeys(false)) {
-            Material material = Material.matchMaterial(key);
-            if (material == null || !material.isItem()) {
-                getLogger().warning("Ignoring invalid item in limits: " + key);
-                continue;
+        if (getConfig().getConfigurationSection("limits") != null) {
+            for (String key : getConfig().getConfigurationSection("limits").getKeys(false)) {
+                Material m = Material.matchMaterial(key);
+                int n = getConfig().getInt("limits."+key,-1);
+                if (m != null && m.isItem() && n >= 0) limits.put(m,n);
             }
-            int amount = getConfig().getInt("limits." + key, -1);
-            if (amount >= 0) limits.put(material, amount);
         }
+        notifyPlayer = getConfig().getBoolean("notify-player",true);
+        intervalTicks = Math.max(1,getConfig().getInt("enforcement-interval-ticks",2));
+        Bukkit.getPluginManager().registerEvents(this,this);
+        Bukkit.getScheduler().runTaskTimer(this,()->Bukkit.getOnlinePlayers().forEach(this::enforce),1L,intervalTicks);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onJoin(PlayerJoinEvent e) { schedule(e.getPlayer()); }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPickup(EntityPickupItemEvent e) {
-        if (e.getEntity() instanceof Player p) schedule(p);
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onClick(InventoryClickEvent e) {
-        if (e.getWhoClicked() instanceof Player p) schedule(p);
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onDrag(InventoryDragEvent e) {
-        if (e.getWhoClicked() instanceof Player p) schedule(p);
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onDrop(PlayerDropItemEvent e) { schedule(e.getPlayer()); }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onHeld(PlayerItemHeldEvent e) { schedule(e.getPlayer()); }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onSwap(PlayerSwapHandItemsEvent e) { schedule(e.getPlayer()); }
+    @EventHandler(priority=EventPriority.MONITOR) public void join(PlayerJoinEvent e){schedule(e.getPlayer());}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void pickup(EntityPickupItemEvent e){if(e.getEntity() instanceof Player p)schedule(p);}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void click(InventoryClickEvent e){if(e.getWhoClicked() instanceof Player p)schedule(p);}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void drag(InventoryDragEvent e){if(e.getWhoClicked() instanceof Player p)schedule(p);}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void drop(PlayerDropItemEvent e){schedule(e.getPlayer());}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void held(PlayerItemHeldEvent e){schedule(e.getPlayer());}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void swap(PlayerSwapHandItemsEvent e){schedule(e.getPlayer());}
 
     private void schedule(Player p) {
-        Bukkit.getScheduler().runTask(this, () -> {
-            if (p.isOnline()) enforce(p);
-        });
+        Bukkit.getScheduler().runTask(this,()->{if(p.isOnline())enforce(p);});
     }
 
-    private void enforce(Player player) {
-        // Creative inventory actions use a client-side cursor/slot protocol.
-        // Rewriting the inventory during those actions can make items vanish.
-        // Leave creative players alone rather than risk deleting their items.
-        if (player.getGameMode() == GameMode.CREATIVE || limits.isEmpty()) return;
+    private void enforce(Player p) {
+        // Skip Creative entirely: rewriting slots while Creative's client-side
+        // inventory protocol is active can make clicked items disappear.
+        if(p.getGameMode()==GameMode.CREATIVE || limits.isEmpty()) return;
+        EnumMap<Material,Integer> remaining = new EnumMap<>(limits);
+        PlayerInventory inv = p.getInventory();
 
-        EnumMap<Material, Integer> remaining = new EnumMap<>(limits);
-        PlayerInventory inv = player.getInventory();
-
-        // Pass 1: bundle contents have priority and consume the allowance first.
-        // Shulker boxes are deliberately ignored and are never read or modified.
-        ItemStack[] storage = inv.getStorageContents();
-        for (int i = 0; i < storage.length; i++) storage[i] = trimBundleContents(player, storage[i], remaining);
+        // Loose inventory items have priority and are kept first.
+        ItemStack[] storage=inv.getStorageContents();
+        for(int i=0;i<storage.length;i++) storage[i]=trimLoose(p,storage[i],remaining);
         inv.setStorageContents(storage);
-
-        ItemStack[] armor = inv.getArmorContents();
-        for (int i = 0; i < armor.length; i++) armor[i] = trimBundleContents(player, armor[i], remaining);
+        ItemStack[] armor=inv.getArmorContents();
+        for(int i=0;i<armor.length;i++) armor[i]=trimLoose(p,armor[i],remaining);
         inv.setArmorContents(armor);
+        inv.setItemInOffHand(trimLoose(p,inv.getItemInOffHand(),remaining));
 
-        inv.setItemInOffHand(trimBundleContents(player, inv.getItemInOffHand(), remaining));
-
-        // Pass 2: loose items are trimmed only after all bundle contents have
-        // been counted, so loose excess is dropped before bundle contents.
-        storage = inv.getStorageContents();
-        for (int i = 0; i < storage.length; i++) storage[i] = trimDirect(player, storage[i], remaining);
+        // Bundle contents are counted after loose items, so they are the first
+        // source trimmed when the combined total exceeds the limit. Shulkers
+        // are not inspected or changed.
+        storage=inv.getStorageContents();
+        for(int i=0;i<storage.length;i++) storage[i]=trimBundles(p,storage[i],remaining);
         inv.setStorageContents(storage);
-
-        armor = inv.getArmorContents();
-        for (int i = 0; i < armor.length; i++) armor[i] = trimDirect(player, armor[i], remaining);
+        armor=inv.getArmorContents();
+        for(int i=0;i<armor.length;i++) armor[i]=trimBundles(p,armor[i],remaining);
         inv.setArmorContents(armor);
-
-        inv.setItemInOffHand(trimDirect(player, inv.getItemInOffHand(), remaining));
-        player.updateInventory();
+        inv.setItemInOffHand(trimBundles(p,inv.getItemInOffHand(),remaining));
     }
 
-    private ItemStack trimDirect(Player player, ItemStack original, EnumMap<Material, Integer> remaining) {
-        if (original == null || original.getType().isAir()) return original;
-        Material type = original.getType();
-        if (!limits.containsKey(type)) return original;
-
-        ItemStack stack = original.clone();
-        int left = Math.max(0, remaining.getOrDefault(type, limits.get(type)));
-        int keep = Math.min(stack.getAmount(), left);
-        int excess = stack.getAmount() - keep;
-        remaining.put(type, left - keep);
-        if (excess > 0) dropExcess(player, stack, excess, type);
-        if (keep == 0) return null;
-        stack.setAmount(keep);
-        return stack;
+    private ItemStack trimLoose(Player p,ItemStack item,EnumMap<Material,Integer> remaining) {
+        if(item==null || item.getType().isAir() || !limits.containsKey(item.getType())) return item;
+        Material type=item.getType();
+        int left=Math.max(0,remaining.getOrDefault(type,limits.get(type)));
+        int keep=Math.min(item.getAmount(),left);
+        int excess=item.getAmount()-keep;
+        remaining.put(type,left-keep);
+        if(excess>0) dropExcess(p,item,excess,type);
+        if(keep==0)return null;
+        ItemStack kept=item.clone(); kept.setAmount(keep); return kept;
     }
 
-    private ItemStack trimBundleContents(Player player, ItemStack original, EnumMap<Material, Integer> remaining) {
-        if (original == null || original.getType().isAir()) return original;
-        if (!(original.getItemMeta() instanceof BundleMeta)) return original;
-
-        ItemStack stack = original.clone();
-        BundleMeta meta = (BundleMeta) stack.getItemMeta();
-        List<ItemStack> cleaned = new ArrayList<>();
-        for (ItemStack child : meta.getItems()) {
+    private ItemStack trimBundles(Player p,ItemStack item,EnumMap<Material,Integer> remaining) {
+        if(item==null || item.getType().isAir() || !(item.getItemMeta() instanceof BundleMeta)) return item;
+        ItemStack result=item.clone();
+        BundleMeta meta=(BundleMeta)result.getItemMeta();
+        List<ItemStack> kept=new ArrayList<>();
+        for(ItemStack child:meta.getItems()) {
             ItemStack safe;
-            if (child != null && limits.containsKey(child.getType())) {
-                Material type = child.getType();
-                int left = Math.max(0, remaining.getOrDefault(type, limits.get(type)));
-                int keep = Math.min(child.getAmount(), left);
-                int excess = child.getAmount() - keep;
-                remaining.put(type, left - keep);
-                if (excess > 0) dropExcess(player, child, excess, type);
-                safe = keep == 0 ? null : child.clone();
-                if (safe != null) safe.setAmount(keep);
-            } else {
-                safe = trimBundleContents(player, child, remaining);
-            }
-            if (safe != null && !safe.getType().isAir()) cleaned.add(safe);
+            if(child!=null && limits.containsKey(child.getType())) {
+                Material type=child.getType();
+                int left=Math.max(0,remaining.getOrDefault(type,limits.get(type)));
+                int keep=Math.min(child.getAmount(),left);
+                int excess=child.getAmount()-keep;
+                remaining.put(type,left-keep);
+                if(excess>0)dropExcess(p,child,excess,type);
+                safe=keep==0?null:child.clone();
+                if(safe!=null)safe.setAmount(keep);
+            } else safe=trimBundles(p,child,remaining);
+            if(safe!=null && !safe.getType().isAir())kept.add(safe);
         }
-        meta.setItems(cleaned);
-        stack.setItemMeta(meta);
-        return stack;
+        meta.setItems(kept);
+        result.setItemMeta(meta);
+        return result;
     }
 
-    private void dropExcess(Player player, ItemStack source, int amount, Material type) {
-        ItemStack dropped = source.clone();
-        dropped.setAmount(amount);
-        player.getWorld().dropItemNaturally(player.getLocation(), dropped);
-        warn(player, type);
+    private void dropExcess(Player p,ItemStack source,int amount,Material type) {
+        ItemStack drop=source.clone(); drop.setAmount(amount);
+        p.getWorld().dropItemNaturally(p.getLocation(),drop);
+        warn(p,type);
     }
 
-    private void warn(Player player, Material material) {
-        if (!notifyPlayer) return;
-        long now = System.currentTimeMillis();
-        Map<Material, Long> playerWarnings = lastWarnings.computeIfAbsent(
-                player.getUniqueId(), id -> new EnumMap<>(Material.class));
-        long last = playerWarnings.getOrDefault(material, 0L);
-        if (now - last < 2000L) return;
-        playerWarnings.put(material, now);
-
-        int limit = limits.getOrDefault(material, 0);
-        String itemName = material == Material.ENDER_PEARL ? "pearls" :
-                material == Material.TOTEM_OF_UNDYING ? "totems" :
-                material.name().toLowerCase().replace('_', ' ') + "s";
-        player.sendMessage("§c[Inventory Limit] Limit of " + limit + " " + itemName + ". Extra items dropped.");
+    private void warn(Player p,Material type) {
+        if(!notifyPlayer)return;
+        long now=System.currentTimeMillis();
+        Map<Material,Long> map=lastWarnings.computeIfAbsent(p.getUniqueId(),k->new EnumMap<>(Material.class));
+        if(now-map.getOrDefault(type,0L)<2000L)return;
+        map.put(type,now);
+        String name=type==Material.ENDER_PEARL?"pearls":type==Material.TOTEM_OF_UNDYING?"totems":type.name().toLowerCase(Locale.ROOT).replace('_',' ')+"s";
+        p.sendMessage("§c[Inventory Limit] Limit of "+limits.get(type)+" "+name+". Extra items dropped.");
     }
 }
