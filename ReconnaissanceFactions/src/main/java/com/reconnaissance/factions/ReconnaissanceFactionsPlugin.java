@@ -32,7 +32,10 @@ public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
     }
 
     void refreshAllPlayerLists() {
-        for (Player player : Bukkit.getOnlinePlayers()) updatePlayerList(player);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            updatePlayerList(player);
+            updateFactionNameTag(player);
+        }
     }
 
     void updateFactionNameTag(Player player) {
