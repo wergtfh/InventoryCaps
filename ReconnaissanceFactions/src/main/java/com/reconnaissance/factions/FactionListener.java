@@ -125,6 +125,21 @@ final class FactionListener implements Listener {
     }
 
     @EventHandler
+    public void onBorderPhysics(BlockPhysicsEvent event) {
+        if (manager.isBorderBlock(event.getBlock().getLocation())) event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onBorderPistonExtend(BlockPistonExtendEvent event) {
+        if (event.getBlocks().stream().anyMatch(block -> manager.isBorderBlock(block.getLocation()))) event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onBorderPistonRetract(BlockPistonRetractEvent event) {
+        if (event.getBlocks().stream().anyMatch(block -> manager.isBorderBlock(block.getLocation()))) event.setCancelled(true);
+    }
+
+    @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         Faction claim = manager.claimAt(event.getBlock().getLocation());
         if (claim == null) return;
@@ -141,6 +156,10 @@ final class FactionListener implements Listener {
 
     @EventHandler
     public void onBlockPlace(BlockPlaceEvent event) {
+        if (manager.isBorderBlock(event.getBlockPlaced().getLocation())) {
+            event.setCancelled(true);
+            return;
+        }
         Faction claim = manager.claimAt(event.getBlock().getLocation());
         if (claim == null) return;
         Material type = event.getBlockPlaced().getType();
