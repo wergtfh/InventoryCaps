@@ -60,10 +60,15 @@ public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
     }
 
     void updatePlayerList(Player player) {
-        // Keep Bukkit's default player-list entry so the client renders each player's
-        // real skin head. Only customize the header/footer; never add faction standings here.
         player.setPlayerListHeader(ChatColor.GOLD.toString() + ChatColor.BOLD + "RECONNAISSANCE SMP");
         player.setPlayerListFooter("");
-        // Do not call setPlayerListName: the vanilla profile/name entry preserves the skin icon.
+        Faction faction = factions.byPlayer(player.getUniqueId());
+        if (faction != null && faction.official) {
+            Component listName = Component.text("[" + faction.name + "] ", factions.color(faction))
+                .append(Component.text(player.getName()));
+            player.playerListName(listName);
+        } else {
+            player.playerListName(Component.text(player.getName()));
+        }
     }
 }
