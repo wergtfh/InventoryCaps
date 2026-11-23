@@ -21,6 +21,7 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.InventoryHolder;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -244,10 +245,11 @@ final class FactionListener implements Listener {
     public void onInventoryOpen(InventoryOpenEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
         Location location = event.getInventory().getLocation();
+        if (location == null || !(location.getBlock().getState() instanceof InventoryHolder)) return;
         Faction claim = manager.claimAt(location);
         if (claim != null && !manager.isMember(claim, player.getUniqueId())) {
             event.setCancelled(true);
-            player.sendMessage(ChatColor.RED + "You cannot access containers in " + claim.name + "'s territory.");
+            player.sendMessage(ChatColor.RED + "You cannot open containers in " + claim.name + "'s territory.");
         }
     }
 
