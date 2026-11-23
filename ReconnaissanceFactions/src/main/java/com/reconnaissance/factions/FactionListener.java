@@ -44,7 +44,9 @@ final class FactionListener implements Listener {
         if (faction == null || !faction.official) return;
         Component prefix = Component.text("[" + faction.name + "] ", manager.color(faction));
         event.renderer((source, sourceDisplayName, message, viewer) ->
-            prefix.append(sourceDisplayName).append(Component.text(": ")).append(message));
+            prefix.append(Component.text(source.getName()))
+                .append(Component.text(": "))
+                .append(Component.text(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(message))));
     }
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
@@ -277,11 +279,14 @@ final class FactionListener implements Listener {
         if (manager.claimAt(event.getBlock().getLocation()) != null) event.setCancelled(true);
     }
 
-    @EventHandler
+    @EventHandler(priority = org.bukkit.event.EventPriority.HIGHEST)
     public void onEntityExplosion(EntityExplodeEvent event) {
-        // Wind charges must still create their normal knockback inside claims.
-        // Keep claim blocks safe by removing them from the explosion's block list.
+        // Wind charges (including the burst produced by Wind Burst) must retain
+        // their vanilla launch/knockback behaviour inside claims, for everyone.
+        // Remove protected claim blocks from the damage list, but do not cancel
+        // the wind-charge effect itself.
         if (event.getEntity() instanceof org.bukkit.entity.WindCharge) {
+            event.setCancelled(false);
             event.blockList().removeIf(block -> manager.claimAt(block.getLocation()) != null);
             return;
         }
