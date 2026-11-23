@@ -279,6 +279,12 @@ final class FactionListener implements Listener {
 
     @EventHandler
     public void onEntityExplosion(EntityExplodeEvent event) {
+        // Wind charges must still create their normal knockback inside claims.
+        // Keep claim blocks safe by removing them from the explosion's block list.
+        if (event.getEntity() instanceof org.bukkit.entity.WindCharge) {
+            event.blockList().removeIf(block -> manager.claimAt(block.getLocation()) != null);
+            return;
+        }
         if (manager.claimAt(event.getLocation()) != null) {
             event.setCancelled(true);
             return;
