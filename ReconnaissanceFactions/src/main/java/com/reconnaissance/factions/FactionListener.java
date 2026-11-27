@@ -219,11 +219,6 @@ final class FactionListener implements Listener {
         Faction claim = manager.claimAt(event.getBlock().getLocation());
         if (claim == null) return;
         Material type = event.getBlockPlaced().getType();
-        if (isExplosive(type)) {
-            event.setCancelled(true);
-            event.getPlayer().sendMessage(ChatColor.RED + "Explosives are disabled in faction territory.");
-            return;
-        }
         if (!manager.isMember(claim, event.getPlayer().getUniqueId()) && type != Material.COBWEB) {
             event.setCancelled(true);
             event.getPlayer().sendMessage(ChatColor.RED + "Enemies may only place cobwebs and water here.");
@@ -282,26 +277,21 @@ final class FactionListener implements Listener {
 
     @EventHandler(priority = org.bukkit.event.EventPriority.HIGHEST)
     public void onEntityExplosion(EntityExplodeEvent event) {
-        // Wind charges (including the burst produced by Wind Burst) must retain
-        // their vanilla launch/knockback behaviour inside claims, for everyone.
-        // Remove protected claim blocks from the damage list, but do not cancel
-        // the wind-charge effect itself.
-        if (event.getEntity() instanceof org.bukkit.entity.WindCharge) {
-            event.setCancelled(false);
-            event.blockList().removeIf(block -> manager.claimAt(block.getLocation()) != null);
-            return;
-        }
+        // Preserve vanilla entity damage and knockback. Only suppress terrain
+        // destruction when the explosion originates in faction territory.
         if (manager.claimAt(event.getLocation()) != null) {
-            event.setCancelled(true);
+            event.blockList().clear();
             return;
         }
         event.blockList().removeIf(block -> manager.claimAt(block.getLocation()) != null);
     }
 
-    @EventHandler
+    @EventHandler(priority = org.bukkit.event.EventPriority.HIGHEST)
     public void onBlockExplosion(BlockExplodeEvent event) {
+        // Bed/anchor explosions are block-origin explosions. Keep their player
+        // damage and knockback, but prevent all block destruction in claims.
         if (manager.claimAt(event.getBlock().getLocation()) != null) {
-            event.setCancelled(true);
+            event.blockList().clear();
             return;
         }
         event.blockList().removeIf(block -> manager.claimAt(block.getLocation()) != null);
@@ -312,9 +302,5 @@ final class FactionListener implements Listener {
         if (event.getClickedBlock() == null) return;
         Faction claim = manager.claimAt(event.getClickedBlock().getLocation());
         if (claim == null) return;
-        if (event.getItem() != null && isExplosive(event.getItem().getType())) {
-            event.setCancelled(true);
-            event.getPlayer().sendMessage(ChatColor.RED + "Explosives are disabled in faction territory.");
-        }
     }
 }
