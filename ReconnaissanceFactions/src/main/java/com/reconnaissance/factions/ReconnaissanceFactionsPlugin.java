@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
@@ -65,10 +66,10 @@ public final class ReconnaissanceFactionsPlugin extends JavaPlugin {
         Faction faction = factions.byPlayer(player.getUniqueId());
         if (faction != null && faction.official) {
             Component listName = Component.text("[" + faction.name + "] ", factions.color(faction))
-                .append(Component.text(player.getName()));
+                .append(Component.text(player.getName(), NamedTextColor.WHITE));
             player.playerListName(listName);
         } else {
-            player.playerListName(Component.text(player.getName()));
+            player.playerListName(Component.text(player.getName(), NamedTextColor.WHITE));
         }
     }
 }
