@@ -2,6 +2,7 @@ package com.reconnaissance.factions;
 
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -44,9 +45,9 @@ final class FactionListener implements Listener {
         if (faction == null || !faction.official) return;
         Component prefix = Component.text("[" + faction.name + "] ", manager.color(faction));
         event.renderer((source, sourceDisplayName, message, viewer) ->
-            prefix.append(Component.text(source.getName()))
-                .append(Component.text(": "))
-                .append(Component.text(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(message))));
+            prefix.append(Component.text(source.getName(), NamedTextColor.WHITE))
+                .append(Component.text(": ", NamedTextColor.WHITE))
+                .append(Component.text(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(message), NamedTextColor.WHITE)));
     }
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
