@@ -246,7 +246,9 @@ final class FactionManager {
         Faction faction = byPlayer(killer.getUniqueId());
         if (faction == null || !faction.official) return;
         UUID previous = faction.lastVictims.put(killer.getUniqueId(), victim.getUniqueId());
-        if (faction.members.contains(victim.getUniqueId()) || victim.getUniqueId().equals(previous)) {
+        Faction victimFaction = byPlayer(victim.getUniqueId());
+        if ((victimFaction != null && victimFaction.id.equals(faction.id))
+            || victim.getUniqueId().equals(previous)) {
             save();
             return;
         }
@@ -259,8 +261,19 @@ final class FactionManager {
             save();
             return;
         }
-        faction.points++;
-        faction.expansionChunks++;
+
+        // Base reward is one point. Killing a member of a top-three faction
+        // awards a bonus based on that victim faction's current leaderboard rank.
+        int pointsAwarded = 1;
+        if (victimFaction != null && victimFaction.official) {
+            List<Faction> standings = leaderboard();
+            int victimRank = standings.indexOf(victimFaction) + 1;
+            if (victimRank == 1) pointsAwarded = 5;
+            else if (victimRank == 2) pointsAwarded = 3;
+            else if (victimRank == 3) pointsAwarded = 2;
+        }
+        faction.points += pointsAwarded;
+        faction.expansionChunks += pointsAwarded;
         save();
         syncTopMaces();
     }
